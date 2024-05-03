@@ -1,0 +1,19 @@
+{
+  "name": "chatbot-widget",
+  "scripts": {},
+  "devDependencies": {
+    "@babel/preset-react": "7.23.3",
+    "rollup": "^4.9.6",
+    "rollup-plugin-tsconfig-paths": "^1.5.2",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-replace": "^5.0.5",
+    "@rollup/plugin-terser": "latest",
+    "dotenv": "^16.3.1",
+    "rollup-plugin-inject-process-env": "latest",
+    "rollup-plugin-polyfill-node": "^0.13.0",
+    "rollup-plugin-postcss": "latest",
+    "rollup-plugin-visualizer": "latest"
+  }
+}

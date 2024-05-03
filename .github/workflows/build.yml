@@ -1,0 +1,132 @@
+name: 🚀 Build
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request: {}
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  lint:
+    name: ⬣ ESLint
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: 🛑 Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.12.1
+
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: 🔬 Lint
+        run: npm run lint
+
+  typecheck:
+    name: ʦ TypeScript
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: 🛑 Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.12.1
+
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Content
+        run: ./node_modules/.bin/contentlayer build
+
+      - name: 🔎 Type check
+        run: npm run typecheck --if-present
+
+  test:
+    if: false # disable for now
+    name: ⚫️ Test
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    env:
+      SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ENABLE_STRIPE_TESTING: ${{ vars.ENABLE_STRIPE_TESTING }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+
+    steps:
+      - name: 🛑 Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.12.1
+
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Cypress Binary
+        id: cache-cypress-binary
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/Cypress
+          key: binary-${{ hashFiles('package-lock.json') }}
+
+      - name: Supabase CLI
+        uses: supabase/setup-cli@v1
+
+      - name: Stop Supabase (if running)
+        continue-on-error: true
+        id: supabase-stop
+        run: supabase stop -- --no-backup
+
+      - name: Start Supabase
+        id: supabase-start
+        run: npm run supabase:start -- -x studio,migra,deno-relay,pgadmin-schema-diff,imgproxy,logflare
+
+      - name: Environment variables
+        uses: aarcangeli/load-dotenv@v1.0.0
+        with:
+          filenames: |
+            .env.test
+          quiet: true
+          if-file-not-found: error
+
+      - name: Test DB
+        if: steps.supabase-start.outputs.exit_code == 0
+        run: npm run test:reset:db
+
+      - name: 🔎 Cypress
+        if: steps.supabase-start.outputs.exit_code == 0
+        run: npm run test:e2e build
+
+      - name: Archive test screenshots
+        uses: actions/upload-artifact@v3
+        if: ${{ failure() }}
+        with:
+          name: screenshots
+          path: ./cypress/screenshots/
+          retention-days: 2
+
+      - name: Stop Docker (if running)
+        continue-on-error: true
+        if: always()
+        id: docker-stop
+        run: docker kill $(docker ps -q)
